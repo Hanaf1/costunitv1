@@ -1,0 +1,112 @@
+// Cost Unit Report - data model (lihat PRD-cost-unit-report.md)
+//
+// Catatan desain:
+// - Semua nilai uang (hargaReferensi, hargaSatuan, harga, totalHpp, hargaLama/hargaBaru)
+//   disimpan sebagai Int (Rupiah bulat) — data master yang ada tidak punya pecahan,
+//   dan ini menghindari masalah rounding float untuk perhitungan total.
+// - Status/kategori pakai String biasa (bukan enum Prisma) supaya schema tetap portable
+//   antar connector saat development lokal.
+// - `tahun` + `mingguKe` (ISO week) disimpan eksplisit di PermintaanMingguan agar filter
+//   "pilih minggu" di Laporan tidak perlu hitung ulang dari tanggal setiap query.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Unit {
+  id            String   @id @default(cuid())
+  kodeUnit      String   @unique
+  namaUnit      String
+  strukturInduk String?
+  pjUnit        String?
+  nikPj         String?
+  gedung        String?
+  lantai        String?
+  lokasiDetail  String?
+  status        String   @default("Aktif")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  permintaanMingguan PermintaanMingguan[]
+
+  @@index([namaUnit])
+}
+
+model Barang {
+  id             String   @id @default(cuid())
+  kodeItem       String   @unique
+  namaBarang     String
+  kategori       String?
+  subKategori    String?
+  jenisItem      String?
+  tipeBarang     String?
+  satuanDasar    String
+  satuanKonversi String?
+  hargaReferensi Int
+  status         String   @default("Aktif")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  riwayatHarga   BarangHargaHistory[]
+  permintaanItem PermintaanItem[]
+
+  @@index([namaBarang])
+  @@index([satuanDasar])
+}
+
+// Riwayat perubahan hargaReferensi di master Barang (import ulang atau edit manual).
+// Tidak memengaruhi PermintaanItem yang sudah tersimpan (snapshot harga tetap).
+model BarangHargaHistory {
+  id              String   @id @default(cuid())
+  barangId        String
+  barang          Barang   @relation(fields: [barangId], references: [id], onDelete: Cascade)
+  hargaLama       Int
+  hargaBaru       Int
+  sumberPerubahan String // "Import" | "Edit Manual"
+  diubahOleh      String?
+  createdAt       DateTime @default(now())
+
+  @@index([barangId])
+}
+
+// Header permintaan mingguan: 1 baris per Unit per minggu (unik).
+model PermintaanMingguan {
+  id        String   @id @default(cuid())
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id])
+  tanggal   DateTime // tanggal representatif minggu itu (Senin dari minggu ISO)
+  tahun     Int
+  mingguKe  Int // ISO week number (1-53)
+  totalHpp  Int      @default(0) // computed = SUM(harga) semua PermintaanItem
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items PermintaanItem[]
+
+  @@unique([unitId, tahun, mingguKe])
+  @@index([tahun, mingguKe])
+}
+
+// Baris detail permintaan barang dalam satu PermintaanMingguan.
+model PermintaanItem {
+  id                    String   @id @default(cuid())
+  permintaanMingguanId  String
+  permintaanMingguan    PermintaanMingguan @relation(fields: [permintaanMingguanId], references: [id], onDelete: Cascade)
+  barangId              String?
+  barang                Barang?  @relation(fields: [barangId], references: [id])
+  namaBarangSnapshot    String // snapshot nama barang saat input
+  satuanSnapshot        String // snapshot satuan dasar saat input
+  jumlahBarang          Int
+  hargaSatuan           Int
+  harga                 Int      // computed = jumlahBarang * hargaSatuan
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([permintaanMingguanId])
+  @@index([barangId])
+  @@index([namaBarangSnapshot])
+}

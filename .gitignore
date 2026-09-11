@@ -1,0 +1,65 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# local sqlite db (dipakai sementara untuk dev/testing sebelum connect ke Postgres)
+*.db
+*.db-journal
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+
+# auto-generated oleh `next dev` untuk AI coding agent, tidak perlu masuk git
+AGENTS.md
+CLAUDE.md
+
+# local file uploads (import xlsx, dsb) - jangan dicommit
+/uploads
+/tmp
+
+# file export master data (dipakai lokal untuk db:seed, jangan dicommit)
+master-barang-*.xlsx
+master-unit-*.xlsx
+
+# prisma migration lock is fine to commit; ignore generated client if custom output used
+/generated/prisma
