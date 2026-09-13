@@ -44,7 +44,10 @@ export async function savePermintaanMingguan(input: {
         totalHpp,
       },
       update: {
+        unitId: input.unitId,
         tanggal: input.tanggal,
+        tahun: input.tahun,
+        mingguKe: input.mingguKe,
         totalHpp,
       },
     });

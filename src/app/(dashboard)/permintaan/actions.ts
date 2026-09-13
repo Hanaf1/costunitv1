@@ -76,13 +76,13 @@ export async function savePermintaanAction(
   const { tahun, mingguKe } = parsedWeek;
   const { start } = weekRange(tahun, mingguKe);
 
-  if (!id) {
-    const existing = await findExistingPermintaan(unitId, tahun, mingguKe);
-    if (existing) {
-      // Sesuai keputusan desain: 1 unit hanya 1 submission per minggu.
-      // Kalau sudah ada, arahkan ke halaman edit yang sudah ada (replace).
-      redirect(`/permintaan/${existing.id}`);
-    }
+  const existing = await findExistingPermintaan(unitId, tahun, mingguKe);
+  if (existing && existing.id !== id) {
+    // Sesuai keputusan desain: 1 unit hanya 1 submission per minggu.
+    // Tambah baru: arahkan ke permintaan yang sudah ada (replace).
+    // Edit pindah unit/minggu: tolak supaya tidak bentrok dengan data lain.
+    if (!id) redirect(`/permintaan/${existing.id}`);
+    return { error: "Unit ini sudah punya permintaan di minggu tersebut. Pilih minggu lain atau edit permintaan itu." };
   }
 
   const header = await savePermintaanMingguan({
