@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Filter } from "lucide-react";
+import { useFormStatus } from "react-dom";
+import Form from "next/form";
+import { Filter, Loader2 } from "lucide-react";
 import { buttonPrimary, card, input } from "@/lib/ui";
 import { MultiSelectSearch } from "./multi-select-search";
 
@@ -35,7 +37,7 @@ export function LaporanFilterForm({
   const [currentMode, setCurrentMode] = useState<"minggu" | "rentang">(mode);
 
   return (
-    <form action="/laporan" method="get" className={`flex flex-col gap-5 p-5 ${card}`}>
+    <Form action="/laporan" className={`flex flex-col gap-5 p-5 ${card}`}>
       <div>
         <span className="text-sm font-medium text-slate-700 block mb-2">Periode</span>
         <div className="flex items-center gap-5 mb-3">
@@ -107,11 +109,18 @@ export function LaporanFilterForm({
       </div>
 
       <div>
-        <button type="submit" className={buttonPrimary}>
-          <Filter size={16} />
-          Tampilkan Laporan
-        </button>
+        <SubmitButton />
       </div>
-    </form>
+    </Form>
+  );
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className={buttonPrimary}>
+      {pending ? <Loader2 size={16} className="animate-spin" /> : <Filter size={16} />}
+      {pending ? "Memuat..." : "Tampilkan Laporan"}
+    </button>
   );
 }

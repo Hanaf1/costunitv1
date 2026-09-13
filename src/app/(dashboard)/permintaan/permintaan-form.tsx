@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { Lock, LockOpen, Plus, Trash2 } from "lucide-react";
 import { savePermintaanAction } from "./actions";
 import { DeletePermintaanButton } from "./delete-button";
+import { SearchableSelect } from "../searchable-select";
 import { formatRupiah } from "@/lib/format";
 import { buttonPrimary, buttonSecondary, card, input } from "@/lib/ui";
 
@@ -57,6 +58,11 @@ export function PermintaanForm({
   const [locked, setLocked] = useState(Boolean(initial?.id));
 
   const barangById = useMemo(() => new Map(barangOptions.map((b) => [b.id, b])), [barangOptions]);
+  const barangSelectOptions = useMemo(
+    () => barangOptions.map((b) => ({ value: b.id, label: b.namaBarang, hint: `${b.kodeItem} · ${b.satuanDasar}` })),
+    [barangOptions],
+  );
+  const unitSelectOptions = useMemo(() => units.map((u) => ({ value: u.id, label: u.namaUnit })), [units]);
 
   function lockAndDiscard() {
     if (!initial) return;
@@ -148,24 +154,18 @@ export function PermintaanForm({
       )}
 
       <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl p-5 ${card}`}>
-        <label className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
           <span className="text-sm font-medium text-slate-700">Unit</span>
-          <select
+          <SearchableSelect
             name="unitId"
+            options={unitSelectOptions}
             value={unitId}
-            onChange={(e) => setUnitId(e.target.value)}
-            required
+            onChange={setUnitId}
+            placeholder="Pilih unit..."
             disabled={locked}
-            className={`${input} disabled:bg-slate-50 disabled:text-slate-700`}
-          >
-            <option value="">Pilih unit...</option>
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.namaUnit}
-              </option>
-            ))}
-          </select>
-        </label>
+            fallbackLabel={initial?.unitLabel}
+          />
+        </div>
 
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium text-slate-700">Minggu</span>
@@ -208,21 +208,16 @@ export function PermintaanForm({
               ) : (
                 <tr key={row.key} className="border-t border-slate-100">
                   <td className="px-4 py-2.5">
-                    <select
-                      value={row.barangId}
-                      onChange={(e) => handleBarangSelect(row.key, e.target.value)}
-                      className={`${input} py-1.5 w-64`}
-                    >
-                      <option value="">Pilih barang...</option>
-                      {row.barangId && !barangById.has(row.barangId) && (
-                        <option value={row.barangId}>{row.namaBarangSnapshot}</option>
-                      )}
-                      {barangOptions.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.namaBarang}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="w-72">
+                      <SearchableSelect
+                        options={barangSelectOptions}
+                        value={row.barangId}
+                        onChange={(v) => handleBarangSelect(row.key, v)}
+                        placeholder="Pilih barang..."
+                        fallbackLabel={row.namaBarangSnapshot}
+                        size="sm"
+                      />
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 text-slate-600">{row.satuanSnapshot || "-"}</td>
                   <td className="px-4 py-2.5">

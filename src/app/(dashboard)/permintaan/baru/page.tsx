@@ -7,8 +7,16 @@ export default async function PermintaanBaruPage() {
   await requireSession();
 
   const [units, barang] = await Promise.all([
-    prisma.unit.findMany({ where: { status: "Aktif" }, orderBy: { namaUnit: "asc" } }),
-    prisma.barang.findMany({ where: { status: "Aktif" }, orderBy: { namaBarang: "asc" } }),
+    prisma.unit.findMany({
+      where: { status: "Aktif" },
+      select: { id: true, namaUnit: true },
+      orderBy: { namaUnit: "asc" },
+    }),
+    prisma.barang.findMany({
+      where: { status: "Aktif" },
+      select: { id: true, kodeItem: true, namaBarang: true, satuanDasar: true, hargaReferensi: true },
+      orderBy: { namaBarang: "asc" },
+    }),
   ]);
 
   return (

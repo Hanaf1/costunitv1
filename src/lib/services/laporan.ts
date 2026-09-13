@@ -147,7 +147,13 @@ export async function listAvailableWeeks() {
   return rows;
 }
 
-export async function describeFilters(filters: LaporanFilters): Promise<string> {
+export async function describeFilters(
+  filters: LaporanFilters,
+  lookup?: {
+    units: { id: string; namaUnit: string }[];
+    barang: { id: string; namaBarang: string }[];
+  },
+): Promise<string> {
   const parts: string[] = [];
 
   if (filters.mode === "minggu" && filters.tahun && filters.mingguKe) {
@@ -161,18 +167,22 @@ export async function describeFilters(filters: LaporanFilters): Promise<string> 
   }
 
   if (filters.unitIds.length > 0) {
-    const units = await prisma.unit.findMany({
-      where: { id: { in: filters.unitIds } },
-      select: { namaUnit: true },
-    });
+    const units = lookup
+      ? lookup.units.filter((u) => filters.unitIds.includes(u.id))
+      : await prisma.unit.findMany({
+          where: { id: { in: filters.unitIds } },
+          select: { namaUnit: true },
+        });
     parts.push(`Unit: ${units.map((u) => u.namaUnit).join(", ")}`);
   }
 
   if (filters.barangIds.length > 0) {
-    const barang = await prisma.barang.findMany({
-      where: { id: { in: filters.barangIds } },
-      select: { namaBarang: true },
-    });
+    const barang = lookup
+      ? lookup.barang.filter((b) => filters.barangIds.includes(b.id))
+      : await prisma.barang.findMany({
+          where: { id: { in: filters.barangIds } },
+          select: { namaBarang: true },
+        });
     parts.push(`Item: ${barang.map((b) => b.namaBarang).join(", ")}`);
   }
 

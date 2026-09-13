@@ -21,14 +21,15 @@ export default async function LaporanPage({
   const sp = await searchParams;
   const filters = parseLaporanSearchParams(sp);
 
-  const [weeks, units, barang, satuanOptions, result, filterLabel] = await Promise.all([
+  const [weeks, units, barang, satuanOptions, result] = await Promise.all([
     listAvailableWeeks(),
-    prisma.unit.findMany({ orderBy: { namaUnit: "asc" } }),
-    prisma.barang.findMany({ orderBy: { namaBarang: "asc" } }),
+    prisma.unit.findMany({ select: { id: true, namaUnit: true }, orderBy: { namaUnit: "asc" } }),
+    prisma.barang.findMany({ select: { id: true, namaBarang: true }, orderBy: { namaBarang: "asc" } }),
     listAvailableSatuan(),
     getLaporanData(filters),
-    describeFilters(filters),
   ]);
+  // Pakai daftar unit/barang yang sudah dimuat, tanpa query tambahan ke database.
+  const filterLabel = await describeFilters(filters, { units, barang });
 
   const exportParams = new URLSearchParams();
   exportParams.set("mode", filters.mode);

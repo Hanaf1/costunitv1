@@ -22,8 +22,16 @@ export default async function DetailPermintaanPage({
 
   const [permintaan, units, barang] = await Promise.all([
     getPermintaanForEdit(id),
-    prisma.unit.findMany({ where: { status: "Aktif" }, orderBy: { namaUnit: "asc" } }),
-    prisma.barang.findMany({ where: { status: "Aktif" }, orderBy: { namaBarang: "asc" } }),
+    prisma.unit.findMany({
+      where: { status: "Aktif" },
+      select: { id: true, namaUnit: true },
+      orderBy: { namaUnit: "asc" },
+    }),
+    prisma.barang.findMany({
+      where: { status: "Aktif" },
+      select: { id: true, kodeItem: true, namaBarang: true, satuanDasar: true, hargaReferensi: true },
+      orderBy: { namaBarang: "asc" },
+    }),
   ]);
 
   if (!permintaan) notFound();
