@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { Upload } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "../../page-header";
-import { buttonSecondary, card, badge } from "@/lib/ui";
+import { buttonPrimary, buttonSecondary, card, badge } from "@/lib/ui";
 
 export default async function MasterUnitPage() {
   await requireSession();
@@ -16,10 +16,16 @@ export default async function MasterUnitPage() {
         title="Master Unit"
         description={`${units.length} unit terdaftar.`}
         action={
-          <Link href="/master-data/import" className={buttonSecondary}>
-            <Upload size={16} />
-            Import dari Excel
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/master-data/import" className={buttonSecondary}>
+              <Upload size={16} />
+              Import dari Excel
+            </Link>
+            <Link href="/master-data/unit/baru" className={buttonPrimary}>
+              <Plus size={16} />
+              Tambah Unit
+            </Link>
+          </div>
         }
       />
 

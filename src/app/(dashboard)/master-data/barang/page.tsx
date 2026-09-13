@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, Upload } from "lucide-react";
+import { Plus, Search, Upload } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatRupiah } from "@/lib/format";
@@ -46,10 +46,16 @@ export default async function MasterBarangPage({
         title="Master Barang"
         description={`${total} item terdaftar.`}
         action={
-          <Link href="/master-data/import" className={buttonSecondary}>
-            <Upload size={16} />
-            Import dari Excel
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/master-data/import" className={buttonSecondary}>
+              <Upload size={16} />
+              Import dari Excel
+            </Link>
+            <Link href="/master-data/barang/baru" className={buttonPrimary}>
+              <Plus size={16} />
+              Tambah Barang
+            </Link>
+          </div>
         }
       />
 

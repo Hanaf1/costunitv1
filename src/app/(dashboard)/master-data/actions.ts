@@ -1,9 +1,80 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { parseMasterBarangWorkbook, parseMasterUnitWorkbook } from "@/lib/excel/masterData";
-import { updateBarangManual, upsertBarangFromImport, upsertUnitsFromImport } from "@/lib/services/masterData";
+import {
+  createBarangManual,
+  createUnitManual,
+  updateBarangManual,
+  upsertBarangFromImport,
+  upsertUnitsFromImport,
+} from "@/lib/services/masterData";
+
+export type CreateMasterState = { error?: string } | undefined;
+
+const optional = (formData: FormData, name: string) => String(formData.get(name) ?? "").trim() || null;
+
+export async function createUnitAction(_prev: CreateMasterState, formData: FormData): Promise<CreateMasterState> {
+  await requireSession();
+
+  const kodeUnit = String(formData.get("kodeUnit") ?? "").trim();
+  const namaUnit = String(formData.get("namaUnit") ?? "").trim();
+
+  if (!kodeUnit || !namaUnit) {
+    return { error: "Kode unit dan nama unit wajib diisi." };
+  }
+
+  const result = await createUnitManual({
+    kodeUnit,
+    namaUnit,
+    strukturInduk: optional(formData, "strukturInduk"),
+    pjUnit: optional(formData, "pjUnit"),
+    nikPj: optional(formData, "nikPj"),
+    gedung: optional(formData, "gedung"),
+    lantai: optional(formData, "lantai"),
+    lokasiDetail: optional(formData, "lokasiDetail"),
+    status: String(formData.get("status") ?? "Aktif"),
+  });
+
+  if (result.error) return { error: result.error };
+
+  revalidatePath("/master-data/unit");
+  redirect("/master-data/unit");
+}
+
+export async function createBarangAction(_prev: CreateMasterState, formData: FormData): Promise<CreateMasterState> {
+  await requireSession();
+
+  const kodeItem = String(formData.get("kodeItem") ?? "").trim();
+  const namaBarang = String(formData.get("namaBarang") ?? "").trim();
+  const satuanDasar = String(formData.get("satuanDasar") ?? "").trim();
+  const hargaReferensiRaw = String(formData.get("hargaReferensi") ?? "").replace(/[^0-9-]/g, "");
+  const hargaReferensi = Number(hargaReferensiRaw);
+
+  if (!kodeItem || !namaBarang || !satuanDasar || !hargaReferensiRaw || !Number.isFinite(hargaReferensi)) {
+    return { error: "Kode item, nama barang, satuan dasar, dan harga referensi wajib diisi dengan benar." };
+  }
+
+  const result = await createBarangManual({
+    kodeItem,
+    namaBarang,
+    kategori: optional(formData, "kategori"),
+    subKategori: optional(formData, "subKategori"),
+    jenisItem: optional(formData, "jenisItem"),
+    tipeBarang: optional(formData, "tipeBarang"),
+    satuanDasar,
+    satuanKonversi: optional(formData, "satuanKonversi"),
+    hargaReferensi: Math.round(hargaReferensi),
+    status: String(formData.get("status") ?? "Aktif"),
+  });
+
+  if (result.error) return { error: result.error };
+
+  revalidatePath("/master-data/barang");
+  redirect(`/master-data/barang?q=${encodeURIComponent(kodeItem)}`);
+}
 
 export type ImportState =
   | { ok: true; message: string; warnings: string[] }

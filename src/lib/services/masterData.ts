@@ -56,6 +56,24 @@ export async function upsertBarangFromImport(rows: ParsedBarangRow[]) {
   return { created, updated, hargaChanged };
 }
 
+// Tambah manual via form. Kode yang sudah terpakai ditolak (bukan di-upsert)
+// supaya input manual tidak diam-diam menimpa data hasil import.
+export async function createUnitManual(data: ParsedUnitRow) {
+  const existing = await prisma.unit.findUnique({ where: { kodeUnit: data.kodeUnit } });
+  if (existing) return { error: `Kode Unit "${data.kodeUnit}" sudah terdaftar (${existing.namaUnit}).` };
+
+  await prisma.unit.create({ data });
+  return {};
+}
+
+export async function createBarangManual(data: ParsedBarangRow) {
+  const existing = await prisma.barang.findUnique({ where: { kodeItem: data.kodeItem } });
+  if (existing) return { error: `Kode Item "${data.kodeItem}" sudah terdaftar (${existing.namaBarang}).` };
+
+  const barang = await prisma.barang.create({ data });
+  return { id: barang.id };
+}
+
 export async function updateBarangManual(
   barangId: string,
   data: {
