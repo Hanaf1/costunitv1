@@ -14,6 +14,7 @@ export type LaporanFilters = {
 
 export type LaporanDetailRow = {
   id: string;
+  permintaanMingguanId: string;
   tanggal: Date;
   tahun: number;
   mingguKe: number;
@@ -79,12 +80,13 @@ export async function getLaporanData(filters: LaporanFilters): Promise<LaporanRe
     include: {
       permintaanMingguan: { include: { unit: true } },
     },
-    orderBy: { permintaanMingguan: { tanggal: "desc" } },
+    orderBy: [{ permintaanMingguan: { tanggal: "desc" } }, { createdAt: "desc" }],
     take: 5000,
   });
 
   const detail: LaporanDetailRow[] = items.map((item) => ({
     id: item.id,
+    permintaanMingguanId: item.permintaanMingguanId,
     tanggal: item.permintaanMingguan.tanggal,
     tahun: item.permintaanMingguan.tahun,
     mingguKe: item.permintaanMingguan.mingguKe,

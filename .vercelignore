@@ -1,0 +1,13 @@
+# Jangan upload file env lokal ke Vercel; env production diatur di dashboard/CLI Vercel.
+# Kalau .env ikut ter-upload, Next.js membacanya saat build/runtime dan hash bcrypt
+# (berisi \$) bisa rusak sehingga login gagal.
+.env
+.env.*
+!.env.example
+
+# Data lokal & hasil build
+*.xlsx
+.next
+node_modules
+.vercel
+tsconfig.tsbuildinfo

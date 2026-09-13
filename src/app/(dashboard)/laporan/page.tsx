@@ -1,4 +1,5 @@
-import { Download } from "lucide-react";
+import Link from "next/link";
+import { Download, Eye } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { describeFilters, getLaporanData, listAvailableSatuan, listAvailableWeeks } from "@/lib/services/laporan";
@@ -7,7 +8,7 @@ import { weekLabel } from "@/lib/week";
 import { formatNumber, formatRupiah } from "@/lib/format";
 import { LaporanFilterForm } from "./filter-form";
 import { PageHeader } from "../page-header";
-import { buttonSuccess, card } from "@/lib/ui";
+import { buttonSecondary, buttonSuccess, card } from "@/lib/ui";
 
 const DETAIL_PREVIEW_LIMIT = 200;
 
@@ -66,10 +67,16 @@ export default async function LaporanPage({
           <StatCard label="Total Permintaan" value={formatNumber(result.grandTotal.totalPermintaan)} />
           <StatCard label="Total Harga" value={formatRupiah(result.grandTotal.totalHarga)} accent />
         </div>
-        <a href={`/api/laporan/export?${exportParams.toString()}`} className={buttonSuccess}>
-          <Download size={16} />
-          Export Excel
-        </a>
+        <div className="flex gap-2 flex-wrap">
+          <a href={`/api/laporan/export?${exportParams.toString()}`} className={buttonSuccess}>
+            <Download size={16} />
+            Export Excel
+          </a>
+          <a href={`/api/laporan/export?${exportParams.toString()}&format=rincian-unit`} className={buttonSecondary}>
+            <Download size={16} />
+            Export Format Rincian per Unit
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -93,6 +100,7 @@ export default async function LaporanPage({
                 <th className="px-4 py-2.5 font-medium text-right">Jumlah</th>
                 <th className="px-4 py-2.5 font-medium text-right">Harga Satuan</th>
                 <th className="px-4 py-2.5 font-medium text-right">Harga</th>
+                <th className="px-4 py-2.5 font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -110,11 +118,20 @@ export default async function LaporanPage({
                   <td className="px-4 py-2.5 text-right text-slate-600">{formatNumber(row.jumlahBarang)}</td>
                   <td className="px-4 py-2.5 text-right text-slate-600">{formatRupiah(row.hargaSatuan)}</td>
                   <td className="px-4 py-2.5 text-right text-slate-900 font-medium">{formatRupiah(row.harga)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <Link
+                      href={`/permintaan/${row.permintaanMingguanId}`}
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <Eye size={14} />
+                      Lihat
+                    </Link>
+                  </td>
                 </tr>
               ))}
               {result.detail.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
                     Tidak ada data untuk filter ini.
                   </td>
                 </tr>

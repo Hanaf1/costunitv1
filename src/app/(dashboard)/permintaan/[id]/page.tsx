@@ -1,13 +1,15 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPermintaanForEdit } from "@/lib/services/permintaan";
+import { weekLabel } from "@/lib/week";
 import { PermintaanForm } from "../permintaan-form";
-import { deletePermintaanAction } from "../actions";
 import { PageHeader } from "../../page-header";
-import { buttonDanger } from "@/lib/ui";
+import { buttonSecondary } from "@/lib/ui";
 
-export default async function EditPermintaanPage({
+export default async function DetailPermintaanPage({
   params,
   searchParams,
 }: {
@@ -28,17 +30,22 @@ export default async function EditPermintaanPage({
 
   const mingguValue = `${permintaan.tahun}-W${String(permintaan.mingguKe).padStart(2, "0")}`;
 
+  // Unit nonaktif tetap harus tampil di detail permintaan lamanya.
+  const unitOptions = units.map((u) => ({ id: u.id, namaUnit: u.namaUnit }));
+  if (!unitOptions.some((u) => u.id === permintaan.unitId)) {
+    unitOptions.unshift({ id: permintaan.unit.id, namaUnit: permintaan.unit.namaUnit });
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Edit Permintaan Mingguan"
-        description={permintaan.unit.namaUnit}
+        title="Detail Permintaan Mingguan"
+        description={`${permintaan.unit.namaUnit} — ${weekLabel(permintaan.tahun, permintaan.mingguKe)}`}
         action={
-          <form action={deletePermintaanAction.bind(null, permintaan.id)}>
-            <button type="submit" className={buttonDanger}>
-              Hapus Permintaan Ini
-            </button>
-          </form>
+          <Link href="/permintaan" className={buttonSecondary}>
+            <ArrowLeft size={16} />
+            Kembali
+          </Link>
         }
       />
 
@@ -49,7 +56,8 @@ export default async function EditPermintaanPage({
       )}
 
       <PermintaanForm
-        units={units.map((u) => ({ id: u.id, namaUnit: u.namaUnit }))}
+        key={permintaan.updatedAt.toISOString()}
+        units={unitOptions}
         barangOptions={barang.map((b) => ({
           id: b.id,
           kodeItem: b.kodeItem,
@@ -60,6 +68,7 @@ export default async function EditPermintaanPage({
         initial={{
           id: permintaan.id,
           unitId: permintaan.unitId,
+          unitLabel: permintaan.unit.namaUnit,
           mingguValue,
           items: permintaan.items.map((item, index) => ({
             key: `existing-${index}`,

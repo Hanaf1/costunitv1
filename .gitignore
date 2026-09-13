@@ -63,3 +63,6 @@ master-unit-*.xlsx
 
 # prisma migration lock is fine to commit; ignore generated client if custom output used
 /generated/prisma
+
+.vercel
+.env*

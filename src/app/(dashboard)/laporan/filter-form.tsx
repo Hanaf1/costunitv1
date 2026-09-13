@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Filter } from "lucide-react";
 import { buttonPrimary, card, input } from "@/lib/ui";
+import { MultiSelectSearch } from "./multi-select-search";
 
 type Option = { value: string; label: string };
 
@@ -83,37 +84,24 @@ export function LaporanFilterForm({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <span className="text-sm font-medium text-slate-700 block mb-1">Unit</span>
-          <select name="unit" multiple defaultValue={selectedUnits} size={6} className={`w-full ${input}`}>
-            {unitOptions.map((u) => (
-              <option key={u.value} value={u.value}>
-                {u.label}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-slate-400 mt-1">Kosongkan = semua unit. Ctrl/Cmd+klik untuk pilih lebih dari satu.</p>
+          <MultiSelectSearch name="unit" options={unitOptions} defaultSelected={selectedUnits} placeholder="Semua unit" />
+          <p className="text-xs text-slate-400 mt-1">Kosongkan = semua unit.</p>
         </div>
 
         <div>
           <span className="text-sm font-medium text-slate-700 block mb-1">Item / Barang</span>
-          <select name="barang" multiple defaultValue={selectedBarang} size={6} className={`w-full ${input}`}>
-            {barangOptions.map((b) => (
-              <option key={b.value} value={b.value}>
-                {b.label}
-              </option>
-            ))}
-          </select>
+          <MultiSelectSearch name="barang" options={barangOptions} defaultSelected={selectedBarang} placeholder="Semua item" />
           <p className="text-xs text-slate-400 mt-1">Kosongkan = semua item.</p>
         </div>
 
         <div>
           <span className="text-sm font-medium text-slate-700 block mb-1">Satuan</span>
-          <select name="satuan" multiple defaultValue={selectedSatuan} size={6} className={`w-full ${input}`}>
-            {satuanOptions.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <MultiSelectSearch
+            name="satuan"
+            options={satuanOptions.map((s) => ({ value: s, label: s }))}
+            defaultSelected={selectedSatuan}
+            placeholder="Semua satuan"
+          />
           <p className="text-xs text-slate-400 mt-1">Kosongkan = semua satuan.</p>
         </div>
       </div>

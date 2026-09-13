@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Eye, Plus } from "lucide-react";
+import { DeletePermintaanButton } from "./delete-button";
 import { requireSession } from "@/lib/auth";
 import { listPermintaanMingguan } from "@/lib/services/permintaan";
 import { weekLabel } from "@/lib/week";
@@ -43,9 +44,19 @@ export default async function PermintaanListPage() {
                 <td className="px-4 py-2.5 text-right text-slate-600">{p._count.items}</td>
                 <td className="px-4 py-2.5 text-right text-slate-900 font-medium">{formatRupiah(p.totalHpp)}</td>
                 <td className="px-4 py-2.5 text-right">
-                  <Link href={`/permintaan/${p.id}`} className="text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2">
-                    Edit
-                  </Link>
+                  <div className="flex items-center justify-end gap-2">
+                    <Link
+                      href={`/permintaan/${p.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <Eye size={14} />
+                      Lihat Detail
+                    </Link>
+                    <DeletePermintaanButton
+                      id={p.id}
+                      description={`${p.unit.namaUnit} - ${weekLabel(p.tahun, p.mingguKe)}`}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}

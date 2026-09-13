@@ -3,6 +3,7 @@ import { getSessionUsername } from "@/lib/auth";
 import { parseLaporanSearchParams } from "@/lib/services/laporanFilters";
 import { describeFilters, getLaporanData } from "@/lib/services/laporan";
 import { buildLaporanWorkbook } from "@/lib/excel/laporan";
+import { buildLaporanRincianUnitWorkbook } from "@/lib/excel/laporanRincianUnit";
 
 export async function GET(request: NextRequest) {
   const username = await getSessionUsername();
@@ -21,10 +22,15 @@ export async function GET(request: NextRequest) {
     satuan: sp.getAll("satuan"),
   });
 
-  const [result, filterLabel] = await Promise.all([getLaporanData(filters), describeFilters(filters)]);
-  const buffer = await buildLaporanWorkbook(result, { filterLabel });
+  const rincianUnit = sp.get("format") === "rincian-unit";
 
-  const filename = `laporan-cost-unit-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const [result, filterLabel] = await Promise.all([getLaporanData(filters), describeFilters(filters)]);
+  const buffer = rincianUnit
+    ? await buildLaporanRincianUnitWorkbook(result)
+    : await buildLaporanWorkbook(result, { filterLabel });
+
+  const prefix = rincianUnit ? "rincian-permintaan-per-unit" : "laporan-cost-unit";
+  const filename = `${prefix}-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
   return new Response(new Uint8Array(buffer), {
     headers: {
