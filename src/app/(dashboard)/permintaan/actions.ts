@@ -1,12 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import { weekRange } from "@/lib/week";
 import {
   findExistingPermintaan,
   savePermintaanMingguan,
   deletePermintaanMingguan,
+  appendOrCreatePermintaan,
   type PermintaanItemInput,
 } from "@/lib/services/permintaan";
 
@@ -103,4 +105,66 @@ export async function deletePermintaanAction(id: string) {
   await requireSession();
   await deletePermintaanMingguan(id);
   redirect("/permintaan");
+}
+
+export type BatchFormInput = { unitId: string; minggu: string; items: PermintaanItemInput[] };
+export type BatchSaveResult =
+  | { ok: true; saved: { unitId: string; minggu: string; id: string; appended: boolean; itemCount: number }[] }
+  | { ok: false; error: string };
+
+// Simpan hasil scan batch: tiap formulir -> permintaan unit pada minggunya.
+// Formulir dengan unit + minggu sama dalam satu batch digabung jadi satu.
+export async function saveBatchPermintaanAction(forms: BatchFormInput[]): Promise<BatchSaveResult> {
+  await requireSession();
+
+  if (!Array.isArray(forms) || forms.length === 0) return { ok: false, error: "Tidak ada formulir untuk disimpan." };
+
+  const merged = new Map<string, BatchFormInput & { tahun: number; mingguKe: number }>();
+  for (const [index, form] of forms.entries()) {
+    const label = `Formulir #${index + 1}`;
+    if (!form?.unitId) return { ok: false, error: `${label}: unit belum dipilih.` };
+    const week = parseMingguValue(String(form.minggu ?? ""));
+    if (!week) return { ok: false, error: `${label}: minggu belum diisi.` };
+    if (!Array.isArray(form.items) || form.items.length === 0) {
+      return { ok: false, error: `${label}: belum ada barang.` };
+    }
+
+    const items: PermintaanItemInput[] = [];
+    for (const it of form.items) {
+      const jumlahBarang = Math.round(Number(it?.jumlahBarang));
+      const hargaSatuan = Math.round(Number(it?.hargaSatuan));
+      const isiSnapshot = Math.round(Number(it?.isiSnapshot ?? 1));
+      if (!it?.barangId || !it.namaBarangSnapshot) return { ok: false, error: `${label}: ada baris yang barangnya belum dipilih.` };
+      if (!Number.isFinite(jumlahBarang) || jumlahBarang <= 0) return { ok: false, error: `${label}: jumlah harus lebih dari 0.` };
+      if (!Number.isFinite(hargaSatuan) || hargaSatuan < 0) return { ok: false, error: `${label}: harga satuan tidak valid.` };
+      items.push({
+        barangId: it.barangId,
+        namaBarangSnapshot: it.namaBarangSnapshot,
+        satuanSnapshot: String(it.satuanSnapshot ?? ""),
+        isiSnapshot: Number.isFinite(isiSnapshot) && isiSnapshot >= 1 ? isiSnapshot : 1,
+        jumlahBarang,
+        hargaSatuan,
+      });
+    }
+
+    const key = `${form.unitId}|${week.tahun}|${week.mingguKe}`;
+    const existing = merged.get(key);
+    if (existing) existing.items.push(...items);
+    else merged.set(key, { unitId: form.unitId, minggu: form.minggu, items, ...week });
+  }
+
+  const saved: Extract<BatchSaveResult, { ok: true }>["saved"] = [];
+  for (const form of merged.values()) {
+    const result = await appendOrCreatePermintaan({
+      unitId: form.unitId,
+      tanggal: weekRange(form.tahun, form.mingguKe).start,
+      tahun: form.tahun,
+      mingguKe: form.mingguKe,
+      items: form.items,
+    });
+    saved.push({ unitId: form.unitId, minggu: form.minggu, id: result.id, appended: result.appended, itemCount: form.items.length });
+  }
+
+  revalidatePath("/permintaan");
+  return { ok: true, saved };
 }

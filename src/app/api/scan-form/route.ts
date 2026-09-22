@@ -3,39 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { createWorker } from "tesseract.js";
 import fuzzysort from "fuzzysort";
 import { GoogleGenAI } from "@google/genai";
+import { generateWithRetry, isOverloaded } from "@/lib/gemini";
 
 // OCR & panggilan Gemini bisa lebih dari batas default function Vercel.
 export const maxDuration = 60;
-
-// Model utama dulu, lalu cadangan kalau model utama sedang penuh (503/429).
-const GEMINI_MODELS = (process.env.GEMINI_MODELS ?? "gemini-3.6-flash,gemini-3.5-flash,gemini-flash-latest")
-  .split(",")
-  .map((m) => m.trim())
-  .filter(Boolean);
-
-function isOverloaded(error: unknown) {
-  const status = (error as { status?: number })?.status;
-  return status === 503 || status === 429 || status === 500;
-}
-
-async function generateWithRetry(
-  ai: GoogleGenAI,
-  request: Omit<Parameters<GoogleGenAI["models"]["generateContent"]>[0], "model">,
-) {
-  let lastError: unknown;
-  for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        return await ai.models.generateContent({ ...request, model });
-      } catch (error) {
-        lastError = error;
-        if (!isOverloaded(error)) throw error;
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-      }
-    }
-  }
-  throw lastError;
-}
 
 export async function POST(req: NextRequest) {
   try {

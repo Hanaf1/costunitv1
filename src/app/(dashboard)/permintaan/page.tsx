@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Eye, Plus } from "lucide-react";
+import { Eye, Plus, ScanLine } from "lucide-react";
 import { DeletePermintaanButton } from "./delete-button";
 import { UsageChart } from "./usage-chart";
 import { requireSession } from "@/lib/auth";
@@ -60,10 +60,16 @@ export default async function PermintaanListPage({
         title="Permintaan Mingguan"
         description={`${list.length} submission${isFiltered ? " sesuai filter" : " tercatat (terbaru di atas)"}.`}
         action={
-          <Link href="/permintaan/baru" className={buttonPrimary}>
-            <Plus size={16} />
-            Permintaan Baru
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/permintaan/scan-batch" className={buttonSecondary}>
+              <ScanLine size={16} />
+              Scan Batch
+            </Link>
+            <Link href="/permintaan/baru" className={buttonPrimary}>
+              <Plus size={16} />
+              Permintaan Baru
+            </Link>
+          </div>
         }
       />
 

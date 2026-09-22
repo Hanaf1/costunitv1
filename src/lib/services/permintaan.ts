@@ -119,3 +119,66 @@ export async function usagePerItem(filter: PermintaanListFilter = {}) {
 export async function deletePermintaanMingguan(id: string) {
   await prisma.permintaanMingguan.delete({ where: { id } });
 }
+
+// Opsi barang aktif (+ satuan alternatif) untuk form permintaan & scan batch.
+export async function getBarangOptions() {
+  return prisma.barang.findMany({
+    where: { status: "Aktif" },
+    select: {
+      id: true,
+      kodeItem: true,
+      namaBarang: true,
+      satuanDasar: true,
+      hargaReferensi: true,
+      satuanList: { select: { namaSatuan: true, isi: true, harga: true }, orderBy: { isi: "asc" } },
+    },
+    orderBy: { namaBarang: "asc" },
+  });
+}
+
+// Scan batch: kalau unit sudah punya permintaan di minggu itu, item DITAMBAHKAN
+// (tidak mengganti isi lama seperti savePermintaanMingguan); kalau belum, dibuat baru.
+export async function appendOrCreatePermintaan(input: {
+  unitId: string;
+  tanggal: Date;
+  tahun: number;
+  mingguKe: number;
+  items: PermintaanItemInput[];
+}) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.permintaanMingguan.findUnique({
+      where: { unitId_tahun_mingguKe: { unitId: input.unitId, tahun: input.tahun, mingguKe: input.mingguKe } },
+      select: { id: true },
+    });
+    const header =
+      existing ??
+      (await tx.permintaanMingguan.create({
+        data: { unitId: input.unitId, tanggal: input.tanggal, tahun: input.tahun, mingguKe: input.mingguKe },
+        select: { id: true },
+      }));
+
+    await tx.permintaanItem.createMany({
+      data: input.items.map((item) => ({
+        permintaanMingguanId: header.id,
+        barangId: item.barangId,
+        namaBarangSnapshot: item.namaBarangSnapshot,
+        satuanSnapshot: item.satuanSnapshot,
+        isiSnapshot: item.isiSnapshot,
+        jumlahBarang: item.jumlahBarang,
+        hargaSatuan: item.hargaSatuan,
+        harga: Math.round(item.jumlahBarang * item.hargaSatuan),
+      })),
+    });
+
+    const sum = await tx.permintaanItem.aggregate({
+      where: { permintaanMingguanId: header.id },
+      _sum: { harga: true },
+    });
+    await tx.permintaanMingguan.update({
+      where: { id: header.id },
+      data: { totalHpp: sum._sum.harga ?? 0 },
+    });
+
+    return { id: header.id, appended: Boolean(existing) };
+  });
+}

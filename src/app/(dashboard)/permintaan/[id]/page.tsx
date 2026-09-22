@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPermintaanForEdit } from "@/lib/services/permintaan";
+import { getBarangOptions, getPermintaanForEdit } from "@/lib/services/permintaan";
 import { weekLabel } from "@/lib/week";
 import { PermintaanForm } from "../permintaan-form";
 import { PageHeader } from "../../page-header";
@@ -27,18 +27,7 @@ export default async function DetailPermintaanPage({
       select: { id: true, namaUnit: true },
       orderBy: { namaUnit: "asc" },
     }),
-    prisma.barang.findMany({
-      where: { status: "Aktif" },
-      select: {
-        id: true,
-        kodeItem: true,
-        namaBarang: true,
-        satuanDasar: true,
-        hargaReferensi: true,
-        satuanList: { select: { namaSatuan: true, isi: true, harga: true }, orderBy: { isi: "asc" } },
-      },
-      orderBy: { namaBarang: "asc" },
-    }),
+    getBarangOptions(),
   ]);
 
   if (!permintaan) notFound();

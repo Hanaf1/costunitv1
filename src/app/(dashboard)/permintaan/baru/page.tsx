@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getBarangOptions } from "@/lib/services/permintaan";
 import { PermintaanForm } from "../permintaan-form";
 import { PageHeader } from "../../page-header";
 
@@ -12,18 +13,7 @@ export default async function PermintaanBaruPage() {
       select: { id: true, namaUnit: true },
       orderBy: { namaUnit: "asc" },
     }),
-    prisma.barang.findMany({
-      where: { status: "Aktif" },
-      select: {
-        id: true,
-        kodeItem: true,
-        namaBarang: true,
-        satuanDasar: true,
-        hargaReferensi: true,
-        satuanList: { select: { namaSatuan: true, isi: true, harga: true }, orderBy: { isi: "asc" } },
-      },
-      orderBy: { namaBarang: "asc" },
-    }),
+    getBarangOptions(),
   ]);
 
   return (

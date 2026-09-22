@@ -7,15 +7,7 @@ import { DeletePermintaanButton } from "./delete-button";
 import { SearchableSelect } from "../searchable-select";
 import { formatRupiah } from "@/lib/format";
 import { buttonPrimary, buttonSecondary, card, input } from "@/lib/ui";
-
-type BarangOption = {
-  id: string;
-  kodeItem: string;
-  namaBarang: string;
-  satuanDasar: string;
-  hargaReferensi: number;
-  satuanList: { namaSatuan: string; isi: number; harga: number | null }[];
-};
+import { satuanChoices, type BarangOption } from "@/lib/satuan";
 
 type UnitOption = { id: string; namaUnit: string };
 
@@ -28,16 +20,6 @@ type Row = {
   jumlahBarang: number;
   hargaSatuan: number;
 };
-
-type SatuanChoice = { nama: string; isi: number; harga: number };
-
-// Satuan dasar + satuan alternatif barang (mis. Lembar, Rim = 500 Lembar).
-function satuanChoices(b: BarangOption): SatuanChoice[] {
-  return [
-    { nama: b.satuanDasar, isi: 1, harga: b.hargaReferensi },
-    ...b.satuanList.map((s) => ({ nama: s.namaSatuan, isi: s.isi, harga: s.harga ?? b.hargaReferensi * s.isi })),
-  ];
-}
 
 let rowKeyCounter = 0;
 function newRowKey() {
