@@ -4,6 +4,7 @@ export type PermintaanItemInput = {
   barangId: string;
   namaBarangSnapshot: string;
   satuanSnapshot: string;
+  isiSnapshot: number;
   jumlahBarang: number;
   hargaSatuan: number;
 };
@@ -61,6 +62,7 @@ export async function savePermintaanMingguan(input: {
           barangId: item.barangId,
           namaBarangSnapshot: item.namaBarangSnapshot,
           satuanSnapshot: item.satuanSnapshot,
+          isiSnapshot: item.isiSnapshot,
           jumlahBarang: item.jumlahBarang,
           hargaSatuan: item.hargaSatuan,
           harga: item.harga,
@@ -79,12 +81,39 @@ export async function getPermintaanForEdit(id: string) {
   });
 }
 
-export async function listPermintaanMingguan() {
+export type PermintaanListFilter = { unitId?: string; tahun?: number; mingguKe?: number };
+
+function permintaanWhere(f: PermintaanListFilter) {
+  return {
+    ...(f.unitId ? { unitId: f.unitId } : {}),
+    ...(f.tahun && f.mingguKe ? { tahun: f.tahun, mingguKe: f.mingguKe } : {}),
+  };
+}
+
+export async function listPermintaanMingguan(filter: PermintaanListFilter = {}) {
   return prisma.permintaanMingguan.findMany({
+    where: permintaanWhere(filter),
     include: { unit: true, _count: { select: { items: true } } },
     orderBy: [{ tahun: "desc" }, { mingguKe: "desc" }, { unit: { namaUnit: "asc" } }],
     take: 200,
   });
+}
+
+// Rekap pemakaian per barang (+ satuan) untuk chart di halaman permintaan.
+export async function usagePerItem(filter: PermintaanListFilter = {}) {
+  const rows = await prisma.permintaanItem.groupBy({
+    by: ["namaBarangSnapshot", "satuanSnapshot"],
+    where: { permintaanMingguan: permintaanWhere(filter) },
+    _sum: { jumlahBarang: true, harga: true },
+  });
+  return rows
+    .map((r) => ({
+      nama: r.namaBarangSnapshot,
+      satuan: r.satuanSnapshot,
+      jumlah: r._sum.jumlahBarang ?? 0,
+      harga: r._sum.harga ?? 0,
+    }))
+    .sort((a, b) => b.harga - a.harga);
 }
 
 export async function deletePermintaanMingguan(id: string) {

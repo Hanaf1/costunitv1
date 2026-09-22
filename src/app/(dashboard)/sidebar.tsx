@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  ReceiptText,
 } from "lucide-react";
 import { logoutAction } from "./actions";
 
@@ -26,7 +27,7 @@ type NavSection = {
   items: NavItem[];
 };
 
-const NAV_SECTIONS: NavSection[] = [
+export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Laporan",
     items: [
@@ -54,15 +55,20 @@ function SidebarContent({ username, onNavigate }: { username: string; onNavigate
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-5 py-5 border-b border-slate-200">
-        <span className="text-base font-semibold text-slate-900">Cost Unit Report</span>
-        <p className="text-xs text-slate-400 mt-0.5">Logistik Non Medis</p>
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
+        <span className="flex h-9 w-9 items-center justify-center rounded-md bg-white text-slate-900">
+          <ReceiptText size={19} />
+        </span>
+        <div>
+          <span className="block text-sm font-semibold text-white">Cost Unit Report</span>
+          <span className="block text-xs text-slate-400">Logistik Non Medis</span>
+        </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-6">
         {NAV_SECTIONS.map((section) => (
           <div key={section.title}>
-            <p className="px-2 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="px-2 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               {section.title}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -76,8 +82,8 @@ function SidebarContent({ username, onNavigate }: { username: string; onNavigate
                     onClick={onNavigate}
                     className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors ${
                       active
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        ? "bg-white/10 text-white shadow-[inset_2px_0_0_white]"
+                        : "text-slate-400 hover:bg-white/5 hover:text-white"
                     }`}
                   >
                     <Icon size={17} strokeWidth={2} />
@@ -90,17 +96,20 @@ function SidebarContent({ username, onNavigate }: { username: string; onNavigate
         ))}
       </nav>
 
-      <div className="border-t border-slate-200 px-4 py-3">
+      <div className="border-t border-white/10 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-900 truncate">{username}</p>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold uppercase text-white">
+            {username.slice(0, 2)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-white truncate">{username}</p>
             <p className="text-xs text-slate-400">Admin</p>
           </div>
           <form action={logoutAction}>
             <button
               type="submit"
               title="Keluar"
-              className="flex items-center justify-center rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              className="flex items-center justify-center rounded-md p-2 text-slate-400 hover:bg-white/10 hover:text-white"
             >
               <LogOut size={16} />
             </button>
@@ -117,17 +126,20 @@ export function Sidebar({ username }: { username: string }) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 border-r border-slate-200 bg-white">
+      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-slate-900">
         <SidebarContent username={username} />
       </aside>
 
       {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <span className="text-base font-semibold text-slate-900">Cost Unit Report</span>
+      <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-slate-900 px-4 py-3">
+        <span className="flex items-center gap-2 text-sm font-semibold text-white">
+          <ReceiptText size={18} />
+          Cost Unit Report
+        </span>
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
-          className="rounded-md p-2 text-slate-600 hover:bg-slate-100"
+          className="rounded-md p-2 text-slate-300 hover:bg-white/10"
           aria-label="Buka menu"
         >
           <Menu size={20} />
@@ -138,11 +150,11 @@ export function Sidebar({ username }: { username: string }) {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-64 bg-white shadow-xl">
+          <aside className="absolute inset-y-0 left-0 w-64 bg-slate-900 shadow-xl">
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
-              className="absolute right-3 top-3 rounded-md p-1.5 text-slate-500 hover:bg-slate-100"
+              className="absolute right-3 top-3 rounded-md p-1.5 text-slate-400 hover:bg-white/10"
               aria-label="Tutup menu"
             >
               <X size={18} />

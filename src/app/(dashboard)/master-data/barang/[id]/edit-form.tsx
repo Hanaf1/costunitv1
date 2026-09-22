@@ -2,10 +2,11 @@
 
 import { useActionState } from "react";
 import { updateBarangAction } from "../../actions";
-import type { Barang } from "@prisma/client";
+import type { Barang, BarangSatuan } from "@prisma/client";
+import { SatuanListEditor } from "../satuan-list-editor";
 import { buttonPrimary, card, input } from "@/lib/ui";
 
-export function EditBarangForm({ barang }: { barang: Barang }) {
+export function EditBarangForm({ barang }: { barang: Barang & { satuanList: BarangSatuan[] } }) {
   const [state, action, pending] = useActionState(updateBarangAction, undefined);
 
   return (
@@ -66,6 +67,10 @@ export function EditBarangForm({ barang }: { barang: Barang }) {
           </select>
         </Field>
       </div>
+
+      <SatuanListEditor
+        initial={barang.satuanList.map((s) => ({ namaSatuan: s.namaSatuan, isi: s.isi, harga: s.harga }))}
+      />
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
 

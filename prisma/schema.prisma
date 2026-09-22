@@ -53,9 +53,23 @@ model Barang {
 
   riwayatHarga   BarangHargaHistory[]
   permintaanItem PermintaanItem[]
+  satuanList     BarangSatuan[]
 
   @@index([namaBarang])
   @@index([satuanDasar])
+}
+
+// Satuan alternatif selain satuanDasar, mis. 1 Rim = 500 Lembar.
+// harga null = hargaReferensi * isi.
+model BarangSatuan {
+  id         String @id @default(cuid())
+  barangId   String
+  barang     Barang @relation(fields: [barangId], references: [id], onDelete: Cascade)
+  namaSatuan String
+  isi        Int // jumlah satuanDasar dalam 1 satuan ini
+  harga      Int?
+
+  @@unique([barangId, namaSatuan])
 }
 
 // Riwayat perubahan hargaReferensi di master Barang (import ulang atau edit manual).
@@ -99,7 +113,8 @@ model PermintaanItem {
   barangId              String?
   barang                Barang?  @relation(fields: [barangId], references: [id])
   namaBarangSnapshot    String // snapshot nama barang saat input
-  satuanSnapshot        String // snapshot satuan dasar saat input
+  satuanSnapshot        String // snapshot satuan yang dipilih saat input
+  isiSnapshot           Int      @default(1) // jumlah satuan dasar per satuanSnapshot
   jumlahBarang          Int
   hargaSatuan           Int
   harga                 Int      // computed = jumlahBarang * hargaSatuan

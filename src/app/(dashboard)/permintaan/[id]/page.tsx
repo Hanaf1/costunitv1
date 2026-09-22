@@ -29,7 +29,14 @@ export default async function DetailPermintaanPage({
     }),
     prisma.barang.findMany({
       where: { status: "Aktif" },
-      select: { id: true, kodeItem: true, namaBarang: true, satuanDasar: true, hargaReferensi: true },
+      select: {
+        id: true,
+        kodeItem: true,
+        namaBarang: true,
+        satuanDasar: true,
+        hargaReferensi: true,
+        satuanList: { select: { namaSatuan: true, isi: true, harga: true }, orderBy: { isi: "asc" } },
+      },
       orderBy: { namaBarang: "asc" },
     }),
   ]);
@@ -72,6 +79,7 @@ export default async function DetailPermintaanPage({
           namaBarang: b.namaBarang,
           satuanDasar: b.satuanDasar,
           hargaReferensi: b.hargaReferensi,
+          satuanList: b.satuanList,
         }))}
         initial={{
           id: permintaan.id,
@@ -83,6 +91,7 @@ export default async function DetailPermintaanPage({
             barangId: item.barangId ?? "",
             namaBarangSnapshot: item.namaBarangSnapshot,
             satuanSnapshot: item.satuanSnapshot,
+            isiSnapshot: item.isiSnapshot,
             jumlahBarang: item.jumlahBarang,
             hargaSatuan: item.hargaSatuan,
           })),

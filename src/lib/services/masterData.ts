@@ -66,11 +66,13 @@ export async function createUnitManual(data: ParsedUnitRow) {
   return {};
 }
 
-export async function createBarangManual(data: ParsedBarangRow) {
+export type BarangSatuanInput = { namaSatuan: string; isi: number; harga: number | null };
+
+export async function createBarangManual(data: ParsedBarangRow, satuanList: BarangSatuanInput[] = []) {
   const existing = await prisma.barang.findUnique({ where: { kodeItem: data.kodeItem } });
   if (existing) return { error: `Kode Item "${data.kodeItem}" sudah terdaftar (${existing.namaBarang}).` };
 
-  const barang = await prisma.barang.create({ data });
+  const barang = await prisma.barang.create({ data: { ...data, satuanList: { create: satuanList } } });
   return { id: barang.id };
 }
 
@@ -88,10 +90,17 @@ export async function updateBarangManual(
     status: string;
   },
   diubahOleh: string,
+  satuanList?: BarangSatuanInput[],
 ) {
   const existing = await prisma.barang.findUniqueOrThrow({ where: { id: barangId } });
 
-  await prisma.barang.update({ where: { id: barangId }, data });
+  await prisma.$transaction(async (tx) => {
+    await tx.barang.update({ where: { id: barangId }, data });
+    if (satuanList) {
+      await tx.barangSatuan.deleteMany({ where: { barangId } });
+      await tx.barangSatuan.createMany({ data: satuanList.map((s) => ({ ...s, barangId })) });
+    }
+  });
 
   if (existing.hargaReferensi !== data.hargaReferensi) {
     await prisma.barangHargaHistory.create({

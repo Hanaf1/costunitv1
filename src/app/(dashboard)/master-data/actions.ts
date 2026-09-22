@@ -44,6 +44,32 @@ export async function createUnitAction(_prev: CreateMasterState, formData: FormD
   redirect("/master-data/unit");
 }
 
+// Parse satuan alternatif dari SatuanListEditor; null = data tidak valid.
+function parseSatuanList(formData: FormData, satuanDasar: string) {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(String(formData.get("satuanListJson") ?? "[]"));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(raw)) return null;
+  const list: { namaSatuan: string; isi: number; harga: number | null }[] = [];
+  for (const r of raw as Record<string, unknown>[]) {
+    const namaSatuan = String(r?.namaSatuan ?? "").trim();
+    const isi = Math.round(Number(r?.isi));
+    const harga = r?.harga === null || r?.harga === "" || r?.harga === undefined ? null : Math.round(Number(r.harga));
+    if (!namaSatuan) continue;
+    if (!Number.isFinite(isi) || isi < 1 || (harga !== null && (!Number.isFinite(harga) || harga < 0))) return null;
+    if (namaSatuan.toLowerCase() === satuanDasar.toLowerCase()) return null;
+    if (list.some((s) => s.namaSatuan.toLowerCase() === namaSatuan.toLowerCase())) return null;
+    list.push({ namaSatuan, isi, harga });
+  }
+  return list;
+}
+
+const satuanListError =
+  "Satuan lain tidak valid: nama tidak boleh dobel/sama dengan satuan dasar, isi minimal 1, harga tidak negatif.";
+
 export async function createBarangAction(_prev: CreateMasterState, formData: FormData): Promise<CreateMasterState> {
   await requireSession();
 
@@ -57,6 +83,9 @@ export async function createBarangAction(_prev: CreateMasterState, formData: For
     return { error: "Kode item, nama barang, satuan dasar, dan harga referensi wajib diisi dengan benar." };
   }
 
+  const satuanList = parseSatuanList(formData, satuanDasar);
+  if (!satuanList) return { error: satuanListError };
+
   const result = await createBarangManual({
     kodeItem,
     namaBarang,
@@ -68,7 +97,7 @@ export async function createBarangAction(_prev: CreateMasterState, formData: For
     satuanKonversi: optional(formData, "satuanKonversi"),
     hargaReferensi: Math.round(hargaReferensi),
     status: String(formData.get("status") ?? "Aktif"),
-  });
+  }, satuanList);
 
   if (result.error) return { error: result.error };
 
@@ -146,6 +175,9 @@ export async function updateBarangAction(_prev: EditBarangState, formData: FormD
     return { error: "Nama barang, satuan dasar, dan harga referensi wajib diisi dengan benar." };
   }
 
+  const satuanList = parseSatuanList(formData, satuanDasar);
+  if (!satuanList) return { error: satuanListError };
+
   await updateBarangManual(
     id,
     {
@@ -160,6 +192,7 @@ export async function updateBarangAction(_prev: EditBarangState, formData: FormD
       status: String(formData.get("status") ?? "Aktif"),
     },
     username,
+    satuanList,
   );
 
   revalidatePath("/master-data/barang");

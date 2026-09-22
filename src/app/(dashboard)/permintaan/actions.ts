@@ -58,6 +58,7 @@ export async function savePermintaanAction(
     }
     const jumlahBarang = Number((raw as Record<string, unknown>).jumlahBarang);
     const hargaSatuan = Number((raw as Record<string, unknown>).hargaSatuan);
+    const isiSnapshot = Number((raw as Record<string, unknown>).isiSnapshot ?? 1);
     if (!Number.isFinite(jumlahBarang) || jumlahBarang <= 0) {
       return { error: "Jumlah barang harus lebih dari 0 di setiap baris." };
     }
@@ -68,6 +69,7 @@ export async function savePermintaanAction(
       barangId: (raw as Record<string, unknown>).barangId as string,
       namaBarangSnapshot: (raw as Record<string, unknown>).namaBarangSnapshot as string,
       satuanSnapshot: (raw as Record<string, unknown>).satuanSnapshot as string,
+      isiSnapshot: Number.isFinite(isiSnapshot) && isiSnapshot >= 1 ? Math.round(isiSnapshot) : 1,
       jumlahBarang: Math.round(jumlahBarang),
       hargaSatuan: Math.round(hargaSatuan),
     });

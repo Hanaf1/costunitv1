@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 export type LaporanFilters = {
   mode: "minggu" | "rentang";
@@ -61,30 +61,36 @@ function buildHeaderWhere(filters: LaporanFilters): Prisma.PermintaanMingguanWhe
   return where;
 }
 
-export async function getLaporanData(filters: LaporanFilters): Promise<LaporanResult> {
-  const headerWhere = buildHeaderWhere(filters);
-
+function buildItemWhere(filters: LaporanFilters): Prisma.PermintaanItemWhereInput {
   const itemWhere: Prisma.PermintaanItemWhereInput = {
-    permintaanMingguan: headerWhere,
+    permintaanMingguan: buildHeaderWhere(filters),
   };
-
   if (filters.barangIds.length > 0) {
     itemWhere.barangId = { in: filters.barangIds };
   }
   if (filters.satuan.length > 0) {
     itemWhere.satuanSnapshot = { in: filters.satuan };
   }
+  return itemWhere;
+}
 
-  const items = await prisma.permintaanItem.findMany({
-    where: itemWhere,
-    include: {
-      permintaanMingguan: { include: { unit: true } },
-    },
-    orderBy: [{ permintaanMingguan: { tanggal: "desc" } }, { createdAt: "desc" }],
-    take: 5000,
-  });
+const detailSelect = {
+  id: true,
+  permintaanMingguanId: true,
+  namaBarangSnapshot: true,
+  satuanSnapshot: true,
+  jumlahBarang: true,
+  hargaSatuan: true,
+  harga: true,
+  permintaanMingguan: {
+    select: { tanggal: true, tahun: true, mingguKe: true, unitId: true, unit: { select: { namaUnit: true } } },
+  },
+} satisfies Prisma.PermintaanItemSelect;
 
-  const detail: LaporanDetailRow[] = items.map((item) => ({
+type DetailItem = Prisma.PermintaanItemGetPayload<{ select: typeof detailSelect }>;
+
+function toDetailRow(item: DetailItem): LaporanDetailRow {
+  return {
     id: item.id,
     permintaanMingguanId: item.permintaanMingguanId,
     tanggal: item.permintaanMingguan.tanggal,
@@ -97,7 +103,95 @@ export async function getLaporanData(filters: LaporanFilters): Promise<LaporanRe
     jumlahBarang: item.jumlahBarang,
     hargaSatuan: item.hargaSatuan,
     harga: item.harga,
-  }));
+  };
+}
+
+const detailOrder: Prisma.PermintaanItemOrderByWithRelationInput[] = [
+  { permintaanMingguan: { tanggal: "desc" } },
+  { createdAt: "desc" },
+  { id: "asc" },
+];
+
+// Versi halaman web: semua (total, ringkasan, 1 halaman detail) diambil dalam
+// SATU query SQL. DB online punya latency per round-trip dan pooler-nya
+// mengantre query paralel, jadi jumlah query jauh lebih menentukan daripada
+// beratnya query (data kecil, eksekusi di Postgres < 1 ms).
+function buildItemSqlWhere(filters: LaporanFilters): Prisma.Sql {
+  const conds: Prisma.Sql[] = [];
+  if (filters.mode === "minggu" && filters.tahun && filters.mingguKe) {
+    conds.push(Prisma.sql`m.tahun = ${filters.tahun} AND m."mingguKe" = ${filters.mingguKe}`);
+  } else if (filters.mode === "rentang") {
+    if (filters.startDate) conds.push(Prisma.sql`m.tanggal >= ${filters.startDate}`);
+    if (filters.endDate) conds.push(Prisma.sql`m.tanggal <= ${filters.endDate}`);
+  }
+  if (filters.unitIds.length > 0) conds.push(Prisma.sql`m."unitId" IN (${Prisma.join(filters.unitIds)})`);
+  if (filters.barangIds.length > 0) conds.push(Prisma.sql`i."barangId" IN (${Prisma.join(filters.barangIds)})`);
+  if (filters.satuan.length > 0) conds.push(Prisma.sql`i."satuanSnapshot" IN (${Prisma.join(filters.satuan)})`);
+  return conds.length ? Prisma.sql`WHERE ${Prisma.join(conds, " AND ")}` : Prisma.empty;
+}
+
+type LaporanPageSqlRow = {
+  grand: { totalRows: number; jumlah: number; harga: number };
+  by_unit: LaporanSummaryRow[] | null;
+  by_item: LaporanSummaryRow[] | null;
+  detail: (Omit<LaporanDetailRow, "tanggal"> & { tanggal: string })[] | null;
+};
+
+export async function getLaporanPage(filters: LaporanFilters, page: number, pageSize: number) {
+  const where = buildItemSqlWhere(filters);
+  const offset = (page - 1) * pageSize;
+
+  const [row] = await prisma.$queryRaw<LaporanPageSqlRow[]>`
+    WITH f AS (
+      SELECT i.id, i."permintaanMingguanId", i."namaBarangSnapshot", i."satuanSnapshot",
+             i."jumlahBarang", i."hargaSatuan", i.harga, i."createdAt",
+             m.tanggal, m.tahun, m."mingguKe", m."unitId", u."namaUnit"
+      FROM "PermintaanItem" i
+      JOIN "PermintaanMingguan" m ON m.id = i."permintaanMingguanId"
+      JOIN "Unit" u ON u.id = m."unitId"
+      ${where}
+    )
+    SELECT
+      (SELECT json_build_object(
+         'totalRows', count(*)::int,
+         'jumlah', coalesce(sum("jumlahBarang"), 0)::bigint::float8,
+         'harga', coalesce(sum(harga), 0)::bigint::float8) FROM f) AS grand,
+      (SELECT json_agg(x ORDER BY x."totalHarga" DESC) FROM (
+         SELECT "unitId" AS key, min("namaUnit") AS label,
+                sum("jumlahBarang")::float8 AS "totalPermintaan", sum(harga)::float8 AS "totalHarga"
+         FROM f GROUP BY "unitId") x) AS by_unit,
+      (SELECT json_agg(x ORDER BY x."totalHarga" DESC) FROM (
+         SELECT "namaBarangSnapshot" || '__' || "satuanSnapshot" AS key,
+                "namaBarangSnapshot" || ' (' || "satuanSnapshot" || ')' AS label,
+                sum("jumlahBarang")::float8 AS "totalPermintaan", sum(harga)::float8 AS "totalHarga"
+         FROM f GROUP BY "namaBarangSnapshot", "satuanSnapshot") x) AS by_item,
+      (SELECT json_agg(d) FROM (
+         SELECT id, "permintaanMingguanId", tanggal, tahun, "mingguKe", "unitId", "namaUnit",
+                "namaBarangSnapshot", "satuanSnapshot", "jumlahBarang", "hargaSatuan", harga
+         FROM f ORDER BY tanggal DESC, "createdAt" DESC, id
+         LIMIT ${pageSize} OFFSET ${offset}) d) AS detail
+  `;
+
+  return {
+    detail: (row.detail ?? []).map((d) => ({ ...d, tanggal: new Date(d.tanggal) })),
+    totalRows: row.grand.totalRows,
+    summaryByUnit: row.by_unit ?? [],
+    summaryByItem: row.by_item ?? [],
+    grandTotal: { totalPermintaan: row.grand.jumlah, totalHarga: row.grand.harga },
+  };
+}
+
+export async function getLaporanData(filters: LaporanFilters): Promise<LaporanResult> {
+  const itemWhere = buildItemWhere(filters);
+
+  const items = await prisma.permintaanItem.findMany({
+    where: itemWhere,
+    select: detailSelect,
+    orderBy: detailOrder,
+    take: 5000,
+  });
+
+  const detail = items.map(toDetailRow);
 
   const byUnit = new Map<string, LaporanSummaryRow>();
   const byItem = new Map<string, LaporanSummaryRow>();
@@ -200,4 +294,29 @@ export async function listAvailableSatuan() {
     orderBy: { satuanDasar: "asc" },
   });
   return rows.map((r) => r.satuanDasar);
+}
+
+// Opsi filter laporan (minggu, unit, barang, satuan) dalam satu round-trip.
+export async function getLaporanLookups() {
+  const [row] = await prisma.$queryRaw<
+    {
+      weeks: { tahun: number; mingguKe: number }[] | null;
+      units: { id: string; namaUnit: string }[] | null;
+      barang: { id: string; namaBarang: string }[] | null;
+      satuan: string[] | null;
+    }[]
+  >`
+    SELECT
+      (SELECT json_agg(w ORDER BY w.tahun DESC, w."mingguKe" DESC)
+         FROM (SELECT DISTINCT tahun, "mingguKe" FROM "PermintaanMingguan") w) AS weeks,
+      (SELECT json_agg(json_build_object('id', id, 'namaUnit', "namaUnit") ORDER BY "namaUnit") FROM "Unit") AS units,
+      (SELECT json_agg(json_build_object('id', id, 'namaBarang', "namaBarang") ORDER BY "namaBarang") FROM "Barang") AS barang,
+      (SELECT json_agg(DISTINCT "satuanDasar" ORDER BY "satuanDasar") FROM "Barang") AS satuan
+  `;
+  return {
+    weeks: row.weeks ?? [],
+    units: row.units ?? [],
+    barang: row.barang ?? [],
+    satuan: row.satuan ?? [],
+  };
 }

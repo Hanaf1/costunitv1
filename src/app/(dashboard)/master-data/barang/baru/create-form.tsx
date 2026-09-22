@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { createBarangAction } from "../../actions";
+import { SatuanListEditor } from "../satuan-list-editor";
 import { buttonPrimary, card, input } from "@/lib/ui";
 
 export function CreateBarangForm() {
@@ -55,6 +56,8 @@ export function CreateBarangForm() {
       <Field label="Harga Referensi (Rp) *">
         <input name="hargaReferensi" type="number" min={0} step={1} required className={input} />
       </Field>
+
+      <SatuanListEditor />
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
 

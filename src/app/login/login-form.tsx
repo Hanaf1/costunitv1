@@ -2,12 +2,13 @@
 
 import { useActionState } from "react";
 import { loginAction } from "./actions";
+import { buttonPrimary, input } from "@/lib/ui";
 
 export function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState(loginAction, undefined);
 
   return (
-    <form action={action} className="flex flex-col gap-4 w-full max-w-sm">
+    <form action={action} className="flex flex-col gap-4 w-full">
       <input type="hidden" name="next" value={next} />
       <div className="flex flex-col gap-1">
         <label htmlFor="username" className="text-sm font-medium text-slate-700">
@@ -19,7 +20,7 @@ export function LoginForm({ next }: { next: string }) {
           type="text"
           required
           autoFocus
-          className="border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+          className={`${input} py-2.5`}
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -31,14 +32,16 @@ export function LoginForm({ next }: { next: string }) {
           name="password"
           type="password"
           required
-          className="border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+          className={`${input} py-2.5`}
         />
       </div>
-      {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state?.error && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
+      )}
       <button
         type="submit"
         disabled={pending}
-        className="bg-slate-900 text-white rounded-md py-2 text-sm font-medium disabled:opacity-60"
+        className={`${buttonPrimary} mt-2 py-2.5`}
       >
         {pending ? "Memproses..." : "Masuk"}
       </button>

@@ -9,10 +9,10 @@ export const buttonSuccess =
 
 export const buttonDanger = "text-sm text-red-600 hover:text-red-700 underline underline-offset-2";
 
-export const card = "border border-slate-200 rounded-lg bg-white";
+export const card = "border border-slate-200 rounded-lg bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04)]";
 
 export const input =
-  "border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400";
+  "border border-slate-300 rounded-md bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 tabular-nums disabled:bg-slate-50 disabled:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400";
 
 export const badge = (tone: "success" | "neutral") =>
   tone === "success"

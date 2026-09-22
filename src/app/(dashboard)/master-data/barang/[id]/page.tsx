@@ -16,7 +16,7 @@ export default async function EditBarangPage({
 
   const barang = await prisma.barang.findUnique({
     where: { id },
-    include: { riwayatHarga: { orderBy: { createdAt: "desc" }, take: 20 } },
+    include: { satuanList: { orderBy: { isi: "asc" } }, riwayatHarga: { orderBy: { createdAt: "desc" }, take: 20 } },
   });
 
   if (!barang) notFound();

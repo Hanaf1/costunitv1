@@ -12,7 +12,14 @@ if (!connectionString) {
 
 // Prisma 7 wajib pakai driver adapter. Pakai connection string "pooled"
 // dari Neon/Vercel Postgres agar aman dipakai di serverless function Vercel.
-const adapter = new PrismaPg(connectionString);
+// DB online: tiap koneksi baru butuh handshake TLS (~200-400 ms), jadi koneksi
+// idle dipertahankan lama agar dipakai ulang, bukan dibuka ulang tiap request.
+const adapter = new PrismaPg({
+  connectionString,
+  max: 10,
+  idleTimeoutMillis: 5 * 60_000,
+  keepAlive: true,
+});
 
 const basePrisma =
   globalForPrisma.prisma ??

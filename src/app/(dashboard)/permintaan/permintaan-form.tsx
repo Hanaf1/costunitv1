@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
-import { Lock, LockOpen, Plus, Trash2 } from "lucide-react";
+import { useActionState, useMemo, useState, useRef } from "react";
+import { Lock, LockOpen, Plus, Trash2, Camera, Loader2 } from "lucide-react";
 import { savePermintaanAction } from "./actions";
 import { DeletePermintaanButton } from "./delete-button";
 import { SearchableSelect } from "../searchable-select";
@@ -14,6 +14,7 @@ type BarangOption = {
   namaBarang: string;
   satuanDasar: string;
   hargaReferensi: number;
+  satuanList: { namaSatuan: string; isi: number; harga: number | null }[];
 };
 
 type UnitOption = { id: string; namaUnit: string };
@@ -23,9 +24,20 @@ type Row = {
   barangId: string;
   namaBarangSnapshot: string;
   satuanSnapshot: string;
+  isiSnapshot: number;
   jumlahBarang: number;
   hargaSatuan: number;
 };
+
+type SatuanChoice = { nama: string; isi: number; harga: number };
+
+// Satuan dasar + satuan alternatif barang (mis. Lembar, Rim = 500 Lembar).
+function satuanChoices(b: BarangOption): SatuanChoice[] {
+  return [
+    { nama: b.satuanDasar, isi: 1, harga: b.hargaReferensi },
+    ...b.satuanList.map((s) => ({ nama: s.namaSatuan, isi: s.isi, harga: s.harga ?? b.hargaReferensi * s.isi })),
+  ];
+}
 
 let rowKeyCounter = 0;
 function newRowKey() {
@@ -51,11 +63,12 @@ export function PermintaanForm({
   const [state, action, pending] = useActionState(savePermintaanAction, undefined);
   const [unitId, setUnitId] = useState(initial?.unitId ?? "");
   const [mingguValue, setMingguValue] = useState(initial?.mingguValue ?? "");
-  const [rows, setRows] = useState<Row[]>(
-    initial?.items ?? [],
-  );
+  const [rows, setRows] = useState<Row[]>(initial?.items ?? []);
   // Data yang sudah tersimpan dibuka dalam mode terkunci (hanya lihat detail).
   const [locked, setLocked] = useState(Boolean(initial?.id));
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanEngine, setScanEngine] = useState<"gemini" | "local">("gemini");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const barangById = useMemo(() => new Map(barangOptions.map((b) => [b.id, b])), [barangOptions]);
   const barangSelectOptions = useMemo(
@@ -75,7 +88,15 @@ export function PermintaanForm({
   function addRow() {
     setRows((prev) => [
       ...prev,
-      { key: newRowKey(), barangId: "", namaBarangSnapshot: "", satuanSnapshot: "", jumlahBarang: 1, hargaSatuan: 0 },
+      {
+        key: newRowKey(),
+        barangId: "",
+        namaBarangSnapshot: "",
+        satuanSnapshot: "",
+        isiSnapshot: 1,
+        jumlahBarang: 1,
+        hargaSatuan: 0,
+      },
     ]);
   }
 
@@ -90,15 +111,72 @@ export function PermintaanForm({
   function handleBarangSelect(key: string, barangId: string) {
     const barang = barangById.get(barangId);
     if (!barang) {
-      updateRow(key, { barangId: "", namaBarangSnapshot: "", satuanSnapshot: "" });
+      updateRow(key, { barangId: "", namaBarangSnapshot: "", satuanSnapshot: "", isiSnapshot: 1 });
       return;
     }
     updateRow(key, {
       barangId,
       namaBarangSnapshot: barang.namaBarang,
       satuanSnapshot: barang.satuanDasar,
+      isiSnapshot: 1,
       hargaSatuan: barang.hargaReferensi,
     });
+  }
+
+  function handleSatuanSelect(key: string, barangId: string, nama: string) {
+    const barang = barangById.get(barangId);
+    const choice = barang && satuanChoices(barang).find((c) => c.nama === nama);
+    if (!choice) return;
+    updateRow(key, { satuanSnapshot: choice.nama, isiSnapshot: choice.isi, hargaSatuan: choice.harga });
+  }
+
+  async function handleScanForm(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("engine", scanEngine);
+
+      const res = await fetch("/api/scan-form", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Gagal memproses gambar formulir");
+
+      const data = await res.json();
+
+      if (data.unitId) {
+        setUnitId(data.unitId);
+      }
+
+      if (data.items && Array.isArray(data.items)) {
+        const newRows: Row[] = data.items.map((item: { barangId?: string; jumlahBarang?: number }) => {
+          const barang = item.barangId ? barangById.get(item.barangId) : undefined;
+          return {
+            key: newRowKey(),
+            barangId: item.barangId || "",
+            namaBarangSnapshot: barang?.namaBarang || "",
+            satuanSnapshot: barang?.satuanDasar || "",
+            isiSnapshot: 1,
+            jumlahBarang: item.jumlahBarang || 1,
+            hargaSatuan: barang?.hargaReferensi || 0,
+          };
+        });
+
+        setRows((prev) => [...prev, ...newRows.filter((r) => r.barangId)]);
+      }
+    } catch (err) {
+      alert("Error scanning form: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsScanning(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   }
 
   const total = rows.reduce((sum, r) => sum + r.jumlahBarang * r.hargaSatuan, 0);
@@ -110,13 +188,14 @@ export function PermintaanForm({
         barangId: r.barangId,
         namaBarangSnapshot: r.namaBarangSnapshot,
         satuanSnapshot: r.satuanSnapshot,
+        isiSnapshot: r.isiSnapshot,
         jumlahBarang: r.jumlahBarang,
         hargaSatuan: r.hargaSatuan,
       })),
   );
 
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form action={action} className={`flex flex-col gap-5 ${isScanning ? "pointer-events-none" : ""}`}>
       {initial?.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="itemsJson" value={itemsJson} />
 
@@ -176,38 +255,52 @@ export function PermintaanForm({
             onChange={(e) => setMingguValue(e.target.value)}
             required
             disabled={locked}
-            className={`${input} disabled:bg-slate-50 disabled:text-slate-700`}
+            className={input}
           />
         </label>
       </div>
 
       <div className={`overflow-x-auto ${card}`}>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-left">
+          <thead className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500 text-left">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Barang</th>
-              <th className="px-4 py-2.5 font-medium">Satuan</th>
-              <th className="px-4 py-2.5 font-medium">Jumlah</th>
-              <th className="px-4 py-2.5 font-medium">Harga Satuan</th>
-              <th className="px-4 py-2.5 font-medium text-right">Harga</th>
-              {!locked && <th className="px-4 py-2.5 font-medium" />}
+              <th className="w-10 pl-4 pr-2 py-2.5 font-semibold text-right">#</th>
+              <th className="px-3 py-2.5 font-semibold">Barang</th>
+              <th className="px-3 py-2.5 font-semibold">Satuan</th>
+              <th className="px-3 py-2.5 font-semibold text-right">Jumlah</th>
+              <th className="px-3 py-2.5 font-semibold text-right">Harga Satuan</th>
+              <th className="px-3 py-2.5 font-semibold text-right">Subtotal</th>
+              {!locked && <th className="w-10 pr-3" />}
             </tr>
           </thead>
-          <tbody>
-            {rows.map((row) =>
-              locked ? (
-                <tr key={row.key} className="border-t border-slate-100">
-                  <td className="px-4 py-2.5 font-medium text-slate-900">{row.namaBarangSnapshot}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{row.satuanSnapshot || "-"}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{row.jumlahBarang}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{formatRupiah(row.hargaSatuan)}</td>
-                  <td className="px-4 py-2.5 text-right text-slate-900 font-medium">
-                    {formatRupiah(row.jumlahBarang * row.hargaSatuan)}
-                  </td>
-                </tr>
-              ) : (
-                <tr key={row.key} className="border-t border-slate-100">
-                  <td className="px-4 py-2.5">
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row, index) => {
+              const barang = barangById.get(row.barangId);
+              const choices = barang ? satuanChoices(barang) : [];
+              const subtotal = row.jumlahBarang * row.hargaSatuan;
+              const no = <td className="pl-4 pr-2 py-2 text-right text-slate-400 tabular-nums">{index + 1}</td>;
+
+              if (locked) {
+                return (
+                  <tr key={row.key}>
+                    {no}
+                    <td className="px-3 py-2.5 text-slate-900">{row.namaBarangSnapshot}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{row.satuanSnapshot || "-"}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-900 tabular-nums">{row.jumlahBarang}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">
+                      {formatRupiah(row.hargaSatuan)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-slate-900 font-medium tabular-nums">
+                      {formatRupiah(subtotal)}
+                    </td>
+                  </tr>
+                );
+              }
+
+              return (
+                <tr key={row.key}>
+                  {no}
+                  <td className="px-3 py-2">
                     <div className="w-72">
                       <SearchableSelect
                         options={barangSelectOptions}
@@ -219,68 +312,134 @@ export function PermintaanForm({
                       />
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-600">{row.satuanSnapshot || "-"}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-3 py-2">
+                    {barang && choices.length > 1 ? (
+                      <select
+                        value={row.satuanSnapshot}
+                        onChange={(e) => handleSatuanSelect(row.key, row.barangId, e.target.value)}
+                        className={`${input} py-1.5 w-40`}
+                      >
+                        {!choices.some((c) => c.nama === row.satuanSnapshot) && (
+                          <option value={row.satuanSnapshot}>{row.satuanSnapshot}</option>
+                        )}
+                        {choices.map((c) => (
+                          <option key={c.nama} value={c.nama}>
+                            {c.isi > 1 ? `${c.nama} (${c.isi} ${barang.satuanDasar})` : c.nama}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-slate-700">{row.satuanSnapshot || "-"}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
                     <input
                       type="number"
                       min={1}
                       step={1}
                       value={row.jumlahBarang}
                       onChange={(e) => updateRow(row.key, { jumlahBarang: Number(e.target.value) || 0 })}
-                      className={`${input} py-1.5 w-24`}
+                      className={`${input} py-1.5 w-20 text-right ml-auto block`}
                     />
                   </td>
-                  <td className="px-4 py-2.5">
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={row.hargaSatuan}
-                      onChange={(e) => updateRow(row.key, { hargaSatuan: Number(e.target.value) || 0 })}
-                      className={`${input} py-1.5 w-32`}
-                    />
+                  <td className="px-3 py-2">
+                    <div className="relative w-36 ml-auto">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                        Rp
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={row.hargaSatuan}
+                        onChange={(e) => updateRow(row.key, { hargaSatuan: Number(e.target.value) || 0 })}
+                        className={`${input} py-1.5 pl-9 w-full text-right`}
+                      />
+                    </div>
                   </td>
-                  <td className="px-4 py-2.5 text-right text-slate-900 font-medium">
-                    {formatRupiah(row.jumlahBarang * row.hargaSatuan)}
+                  <td className="px-3 py-2 text-right text-slate-900 font-medium tabular-nums whitespace-nowrap">
+                    {formatRupiah(subtotal)}
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="pr-3 py-2 text-right">
                     <button
                       type="button"
                       onClick={() => removeRow(row.key)}
                       title="Hapus baris"
-                      className="rounded-md p-1.5 text-red-600 hover:bg-red-50"
+                      className="rounded p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={15} />
                     </button>
                   </td>
                 </tr>
-              ),
-            )}
+              );
+            })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={locked ? 5 : 6} className="px-4 py-10 text-center text-slate-400">
-                  Belum ada baris barang. Klik &ldquo;Tambah Baris Barang&rdquo; di bawah.
+                <td colSpan={locked ? 6 : 7} className="px-4 py-10 text-center text-slate-500">
+                  Belum ada barang. Tambah baris atau scan foto formulir.
                 </td>
               </tr>
             )}
           </tbody>
+          <tfoot className="border-t border-slate-200 bg-slate-50">
+            <tr>
+              <td colSpan={5} className="px-3 py-3 text-right text-sm text-slate-600">
+                Total HPP · {rows.length} item
+              </td>
+              <td className="px-3 py-3 text-right text-base font-semibold text-slate-900 tabular-nums whitespace-nowrap">
+                {formatRupiah(total)}
+              </td>
+              {!locked && <td />}
+            </tr>
+          </tfoot>
         </table>
       </div>
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        {locked ? (
-          <span />
-        ) : (
-          <button type="button" onClick={addRow} className={buttonSecondary}>
+      {!locked && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button type="button" onClick={addRow} className={buttonSecondary} disabled={isScanning}>
             <Plus size={16} />
-            Tambah Baris Barang
+            Tambah Baris
           </button>
-        )}
-        <div className={`${card} px-4 py-2.5 text-sm`}>
-          <span className="text-slate-500">Total HPP: </span>
-          <span className="font-semibold text-slate-900">{formatRupiah(total)}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setScanEngine("gemini");
+              fileInputRef.current?.click();
+            }}
+            className={buttonSecondary}
+            disabled={isScanning}
+          >
+            {isScanning && scanEngine === "gemini" ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+            Scan Foto (Gemini)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setScanEngine("local");
+              fileInputRef.current?.click();
+            }}
+            className={buttonSecondary}
+            disabled={isScanning}
+          >
+            {isScanning && scanEngine === "local" ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+            Scan Foto (Lokal)
+          </button>
+          {isScanning && (
+            <span className="text-sm text-slate-500">
+              {scanEngine === "gemini" ? "Membaca foto dengan Gemini..." : "Membaca foto (OCR lokal)..."}
+            </span>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleScanForm}
+          />
         </div>
-      </div>
+      )}
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
 
