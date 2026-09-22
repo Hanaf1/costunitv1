@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   ReceiptText,
+  ShieldPlus,
 } from "lucide-react";
 import { logoutAction } from "./actions";
 
@@ -33,6 +34,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/laporan", label: "Laporan Cost Unit", icon: BarChart3 },
       { href: "/permintaan", label: "Permintaan Mingguan", icon: ClipboardList },
+      { href: "/ppi", label: "Perhitungan PPI", icon: ShieldPlus },
     ],
   },
   {
