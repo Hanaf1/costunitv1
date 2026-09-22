@@ -145,9 +145,8 @@ export function PermintaanForm({
         body: formData,
       });
 
-      if (!res.ok) throw new Error("Gagal memproses gambar formulir");
-
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Gagal memproses gambar formulir");
 
       if (data.unitId) {
         setUnitId(data.unitId);
@@ -170,7 +169,7 @@ export function PermintaanForm({
         setRows((prev) => [...prev, ...newRows.filter((r) => r.barangId)]);
       }
     } catch (err) {
-      alert("Error scanning form: " + (err instanceof Error ? err.message : String(err)));
+      alert("Scan gagal: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsScanning(false);
       if (fileInputRef.current) {
