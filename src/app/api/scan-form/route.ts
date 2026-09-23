@@ -8,6 +8,53 @@ import { generateWithRetry, isOverloaded } from "@/lib/gemini";
 // OCR & panggilan Gemini bisa lebih dari batas default function Vercel.
 export const maxDuration = 60;
 
+type OcrWord = {
+  text: string;
+  confidence: number;
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+};
+
+type OcrLine = Omit<OcrWord, "text"> & { text: string; words: OcrWord[] };
+
+function normaliseOcrText(value: string) {
+  return value.toLocaleLowerCase("id-ID").replace(/[^a-z0-9]/g, "");
+}
+
+function flattenOcrLines(blocks: unknown): OcrLine[] {
+  if (!Array.isArray(blocks)) return [];
+
+  const lines: OcrLine[] = [];
+  for (const block of blocks as Array<{ paragraphs?: Array<{ lines?: OcrLine[] }> }>) {
+    for (const paragraph of block.paragraphs ?? []) {
+      for (const line of paragraph.lines ?? []) {
+        if (line.text.trim()) lines.push(line);
+      }
+    }
+  }
+  return lines;
+}
+
+function closestMaster<T extends { target: string }>(text: string, targets: T[], minimumScore: number) {
+  const cleaned = normaliseOcrText(text);
+  if (cleaned.length < 3) return null;
+
+  const exact = targets.find((target) => normaliseOcrText(target.target) === cleaned);
+  if (exact) return exact;
+
+  const result = fuzzysort.go(text, targets, { key: "target", threshold: minimumScore, limit: 1 })[0];
+  return result && result.score >= minimumScore ? result.obj : null;
+}
+
+function parseQuantity(text: string) {
+  // Hanya angka dan pemisah umum yang diterima. Ini mencegah karakter OCR acak
+  // (mis. "MONDDII") berubah menjadi jumlah barang yang salah.
+  if (!/^\s*[0-9][0-9\s/.,-]*\s*$/.test(text)) return null;
+  const digits = text.replace(/\D/g, "");
+  if (!digits) return null;
+  const quantity = Number.parseInt(digits, 10);
+  return Number.isSafeInteger(quantity) && quantity > 0 && quantity <= 10000 ? quantity : null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -97,7 +144,7 @@ Instruksi:
       let result;
       try {
         result = JSON.parse(cleanText || "{}");
-      } catch (e) {
+      } catch {
         console.error("Failed to parse JSON from AI. Raw response:", text);
         return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
       }
@@ -106,47 +153,64 @@ Instruksi:
     } 
     
     else if (engine === "local") {
-      // Run Tesseract.js (Offline OCR)
-      // Filesystem Vercel read-only kecuali /tmp: simpan cache data bahasa di sana.
-      const worker = await createWorker("ind", 1, { cachePath: "/tmp" });
-      const ret = await worker.recognize(buffer);
-      const ocrText = ret.data.text;
+      // OCR lokal tidak cukup aman bila seluruh halaman diperlakukan sebagai satu
+      // kalimat. Form ini memiliki kolom tetap, jadi baca posisi setiap baris dan
+      // gunakan hanya teks di kolom Nama Barang dan Jumlah.
+      // Filesystem Vercel read-only kecuali /tmp: simpan cache bahasa di sana.
+      const worker = await createWorker("ind+eng", 1, { cachePath: "/tmp" });
+      const ret = await worker.recognize(buffer, {}, { text: true, blocks: true });
       await worker.terminate();
 
-      const lines = ocrText.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+      const lines = flattenOcrLines(ret.data.blocks);
+      const unitTargets = units.map((unit) => ({ ...unit, target: unit.namaUnit }));
+      const barangTargets = barang.map((item) => ({ ...item, target: item.namaBarang }));
+      const warnings: string[] = ["Hasil Scan Foto (Lokal) perlu dicek sebelum disimpan, terutama tulisan tangan."];
 
-      const unitTargets = units.map(u => ({ ...u, target: u.namaUnit }));
-      const barangTargets = barang.map(b => ({ ...b, target: b.namaBarang }));
+      const ruangLine = lines.find((line) => normaliseOcrText(line.text).includes("ruang"));
+      const ruangValue = ruangLine?.text.replace(/.*ruang\s*:?\s*/i, "") ?? "";
+      // Ambang ketat: nama unit yang tidak cukup mirip tidak akan mengganti pilihan pengguna.
+      const unitMatch = closestMaster(ruangValue, unitTargets, -350);
 
-      let detectedUnitId: string | null = null;
-      const detectedItems: { barangId: string; jumlahBarang: number }[] = [];
+      const pageLeft = Math.min(...lines.map((line) => line.bbox.x0));
+      const pageRight = Math.max(...lines.map((line) => line.bbox.x1));
+      const pageWidth = pageRight - pageLeft;
+      const tableTop = (ruangLine?.bbox.y1 ?? 0) + 24;
+      const footerLine = lines.find((line) => normaliseOcrText(line.text).includes("petugaslogistik"));
+      const tableBottom = (footerLine?.bbox.y0 ?? Number.POSITIVE_INFINITY) - 12;
+      const itemStart = pageLeft + pageWidth * 0.34;
+      const quantityStart = pageLeft + pageWidth * 0.78;
+      const detectedItems = new Map<string, number>();
 
       for (const line of lines) {
-        if (!detectedUnitId) {
-          const unitMatch = fuzzysort.go(line, unitTargets, { key: 'target', threshold: -100 });
-          if (unitMatch.length > 0 && unitMatch[0].score > -1500) {
-            detectedUnitId = unitMatch[0].obj.id;
-          }
-        }
+        if (line.bbox.y0 < tableTop || line.bbox.y1 > tableBottom) continue;
 
-        const barangMatch = fuzzysort.go(line, barangTargets, { key: 'target', threshold: -2000 });
-        if (barangMatch.length > 0 && barangMatch[0].score > -1000) {
-          const numberMatch = line.match(/\b(\d+)\b/);
-          let jumlah = 1;
-          if (numberMatch && numberMatch[1]) {
-            jumlah = parseInt(numberMatch[1], 10);
-          }
+        const itemWords = line.words.filter((word) => {
+          const middle = (word.bbox.x0 + word.bbox.x1) / 2;
+          return middle >= itemStart && middle < quantityStart;
+        });
+        const quantityWords = line.words.filter((word) => {
+          const middle = (word.bbox.x0 + word.bbox.x1) / 2;
+          return middle >= quantityStart;
+        });
+        const itemText = itemWords.map((word) => word.text).join(" ").trim();
+        const quantityText = quantityWords.map((word) => word.text).join("").trim();
+        const quantity = parseQuantity(quantityText);
+        // Ambang lebih ketat daripada scanner lama supaya teks rusak tidak tersambung
+        // ke barang master yang keliru.
+        const itemMatch = closestMaster(itemText, barangTargets, -220);
 
-          detectedItems.push({
-            barangId: barangMatch[0].obj.id,
-            jumlahBarang: jumlah
-          });
-        }
+        if (!itemMatch || !quantity) continue;
+        detectedItems.set(itemMatch.id, (detectedItems.get(itemMatch.id) ?? 0) + quantity);
       }
 
+      if (!unitMatch && ruangValue) warnings.push("Unit tidak cukup jelas untuk dipilih otomatis.");
+      if (detectedItems.size === 0) warnings.push("Tidak ada baris dengan nama barang dan jumlah yang cukup jelas. Ambil foto lebih tegak dan dekat, lalu isi baris yang belum terbaca secara manual.");
+
       return NextResponse.json({
-        unitId: detectedUnitId,
-        items: detectedItems
+        unitId: unitMatch?.id ?? null,
+        items: [...detectedItems].map(([barangId, jumlahBarang]) => ({ barangId, jumlahBarang })),
+        warnings,
+        reviewRequired: true,
       });
     }
 

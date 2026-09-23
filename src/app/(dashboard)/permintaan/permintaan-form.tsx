@@ -50,6 +50,7 @@ export function PermintaanForm({
   const [locked, setLocked] = useState(Boolean(initial?.id));
   const [isScanning, setIsScanning] = useState(false);
   const [scanEngine, setScanEngine] = useState<"gemini" | "local">("gemini");
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const barangById = useMemo(() => new Map(barangOptions.map((b) => [b.id, b])), [barangOptions]);
@@ -117,6 +118,7 @@ export function PermintaanForm({
     if (!file) return;
 
     setIsScanning(true);
+    setScanNotice(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -129,6 +131,10 @@ export function PermintaanForm({
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Gagal memproses gambar formulir");
+
+      if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        setScanNotice(data.warnings.join(" "));
+      }
 
       if (data.unitId) {
         setUnitId(data.unitId);
@@ -423,6 +429,7 @@ export function PermintaanForm({
       )}
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {scanNotice && <p className="text-sm rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">{scanNotice}</p>}
 
       {!locked && (
         <button type="submit" disabled={pending || rows.length === 0} className={`${buttonPrimary} w-fit`}>
