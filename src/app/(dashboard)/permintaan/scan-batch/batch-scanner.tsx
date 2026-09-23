@@ -8,6 +8,7 @@ import { saveBatchPermintaanAction, type BatchSaveResult } from "../actions";
 import { satuanChoices, type BarangOption } from "@/lib/satuan";
 import { isoWeekInfo } from "@/lib/week";
 import { formatRupiah } from "@/lib/format";
+import { compressImage } from "@/lib/compress-image";
 import { buttonPrimary, buttonSecondary, card, input } from "@/lib/ui";
 import type { ScannedForm } from "@/app/api/scan-batch/route";
 
@@ -43,21 +44,6 @@ function mingguFromTanggal(tanggal: string): string {
   if (Number.isNaN(d.getTime())) return "";
   const w = isoWeekInfo(d);
   return `${w.tahun}-W${String(w.mingguKe).padStart(2, "0")}`;
-}
-
-// Kecilkan foto HP (bisa >5 MB) agar muat batas body request Vercel (4,5 MB).
-async function compressImage(file: File): Promise<Blob> {
-  const MAX = 2000;
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Gagal memproses foto"))), "image/jpeg", 0.85),
-  );
 }
 
 export function BatchScanner({
@@ -115,9 +101,15 @@ export function BatchScanner({
       setPhoto(i, { state: "membaca" });
       try {
         const body = new FormData();
-        body.append("file", await compressImage(file), "form.jpg");
+        // Satu foto bisa berisi banyak formulir kecil: pakai resolusi sedikit lebih tinggi.
+        body.append("file", await compressImage(file, 2000));
         const res = await fetch("/api/scan-batch", { method: "POST", body });
-        const data = (await res.json().catch(() => ({}))) as { forms?: ScannedForm[]; error?: string };
+        const data = (await res.json().catch(() => ({}))) as {
+          forms?: ScannedForm[];
+          model?: string;
+          ms?: number;
+          error?: string;
+        };
         if (!res.ok) throw new Error(data.error || "Gagal membaca foto");
 
         const cards: FormCard[] = (data.forms ?? []).map((f) => ({
@@ -131,7 +123,8 @@ export function BatchScanner({
           rows: f.items.map((it) => rowFromBarang(it.teks, it.barangId, it.jumlah)),
         }));
         setForms((prev) => [...prev, ...cards]);
-        setPhoto(i, { state: "selesai", message: `${cards.length} formulir terbaca` });
+        const info = data.model ? ` · ${data.model}, ${((data.ms ?? 0) / 1000).toFixed(1)} dtk` : "";
+        setPhoto(i, { state: "selesai", message: `${cards.length} formulir terbaca${info}` });
       } catch (err) {
         setPhoto(i, { state: "gagal", message: err instanceof Error ? err.message : String(err) });
       }

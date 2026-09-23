@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       new Date().getFullYear(),
     );
 
-    const response = await generateWithRetry(geminiClient(), {
+    const { response, model, ms } = await generateWithRetry(geminiClient(), {
       contents: [
         {
           role: "user",
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ forms });
+    return NextResponse.json({ forms, model, ms });
   } catch (error) {
     console.error("scan-batch error:", error);
     const message = isOverloaded(error)

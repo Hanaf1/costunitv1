@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createWorker } from "tesseract.js";
 import fuzzysort from "fuzzysort";
-import { GoogleGenAI } from "@google/genai";
-import { generateWithRetry, isOverloaded } from "@/lib/gemini";
+import { geminiClient, generateWithRetry, isOverloaded, parseJsonResponse } from "@/lib/gemini";
 
 // OCR & panggilan Gemini bisa lebih dari batas default function Vercel.
 export const maxDuration = 60;
@@ -75,10 +74,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (engine === "gemini") {
-      if (!process.env.GEMINI_API_KEY) {
-        return NextResponse.json({ error: "GEMINI_API_KEY belum diset di server." }, { status: 500 });
-      }
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = geminiClient();
       const base64Data = buffer.toString("base64");
       
       const unitListText = units.map(u => `ID: ${u.id} | Nama: ${u.namaUnit} | Kode: ${u.kodeUnit}`).join("\n");
@@ -114,7 +110,7 @@ Instruksi:
 }
 `;
 
-      const response = await generateWithRetry(ai, {
+      const { response, model, ms } = await generateWithRetry(ai, {
         contents: [
           {
             role: "user",
@@ -135,21 +131,15 @@ Instruksi:
         },
       });
 
-      const text = response.text || "";
-      let cleanText = text.trim();
-      if (cleanText.startsWith("```")) {
-        cleanText = cleanText.replace(/^```[a-z]*\s*/i, "").replace(/\s*```$/, "");
-      }
-      
       let result;
       try {
-        result = JSON.parse(cleanText || "{}");
+        result = parseJsonResponse(response.text);
       } catch {
-        console.error("Failed to parse JSON from AI. Raw response:", text);
+        console.error("Failed to parse JSON from AI. Raw response:", response.text);
         return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
       }
 
-      return NextResponse.json(result);
+      return NextResponse.json({ ...(result as object), model, ms });
     } 
     
     else if (engine === "local") {

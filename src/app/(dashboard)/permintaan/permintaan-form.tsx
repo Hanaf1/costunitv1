@@ -8,6 +8,7 @@ import { SearchableSelect } from "../searchable-select";
 import { formatRupiah } from "@/lib/format";
 import { buttonPrimary, buttonSecondary, card, input } from "@/lib/ui";
 import { satuanChoices, type BarangOption } from "@/lib/satuan";
+import { compressImage } from "@/lib/compress-image";
 
 type UnitOption = { id: string; namaUnit: string };
 
@@ -121,7 +122,7 @@ export function PermintaanForm({
     setScanNotice(null);
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", await compressImage(file));
       formData.append("engine", scanEngine);
 
       const res = await fetch("/api/scan-form", {
